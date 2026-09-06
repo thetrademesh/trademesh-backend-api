@@ -12,4 +12,4 @@ RUN npx prisma generate --schema=prisma/schema.prisma
 
 EXPOSE 3000
 
-CMD ["npx", "ts-node", "server.ts"]
+CMD ["npm", "start"]

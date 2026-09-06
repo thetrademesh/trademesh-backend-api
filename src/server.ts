@@ -24,9 +24,10 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-export default app;
+
 main().catch((err) => {
   // eslint-disable-next-line no-console
   console.error('Failed to start server:', err);
   process.exit(1);
 });
+export default app;

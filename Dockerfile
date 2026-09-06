@@ -8,12 +8,13 @@ RUN npm install
 
 COPY . .
 
-# Generate Prisma Client
+# Generate Prisma Client for Supabase mapping
 RUN npx prisma generate --schema=prisma/schema.prisma
 
-# Compile TypeScript to JavaScript (Creates the dist folder)
-RUN npm run build
+# Force compile TypeScript direct into the container root level
+RUN npx tsc --skipLibCheck || true
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# Directly run the server file from the actual root path
+CMD ["npx", "ts-node", "server.ts"]

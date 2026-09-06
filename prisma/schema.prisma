@@ -1,0 +1,330 @@
+// TradeMesh — Demo/Simulated Trading Environment
+// This schema models a realistic trading backend for DEMO purposes only.
+// No real money, custody, or identity verification is implied by these models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== ENUMS =====================
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum AssetType {
+  STOCK
+  CRYPTO
+  FOREX
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  OPEN
+  FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum TxType {
+  DEPOSIT
+  WITHDRAWAL
+  TRADE_BUY
+  TRADE_SELL
+  FEE
+  ADJUSTMENT
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum NotificationType {
+  ORDER_FILLED
+  ORDER_CANCELLED
+  DEPOSIT
+  WITHDRAWAL
+  KYC
+  SECURITY
+  SYSTEM
+}
+
+// ===================== USER & AUTH =====================
+
+model User {
+  id            String     @id @default(cuid())
+  fullName      String
+  email         String     @unique
+  mobile        String?
+  passwordHash  String
+  country       String?
+  role          Role       @default(USER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  sessions      Session[]
+  wallet        Wallet?
+  holdings      Holding[]
+  orders        Order[]
+  watchlists    Watchlist[]
+  notifications Notification[]
+  kycProfile    KycProfile?
+  twoFactor     TwoFactorAuth?
+  auditLogs     AuditLog[]
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash  String
+  userAgent         String?
+  ipAddress         String?
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// ===================== ASSETS / MARKET DATA =====================
+
+model Asset {
+  id             String    @id @default(cuid())
+  symbol         String    @unique
+  name           String
+  type           AssetType
+  exchange       String?
+  quoteCurrency  String    @default("USD")
+  currentPrice   Decimal
+  previousPrice  Decimal
+  change24h      Decimal   @default(0)
+  volume24h      String?
+  isActive       Boolean   @default(true)
+  priceUpdatedAt DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  holdings       Holding[]
+  orders         Order[]
+  watchlistItems WatchlistItem[]
+}
+
+// ===================== WATCHLIST =====================
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   @default("Default")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     WatchlistItem[]
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id          String    @id @default(cuid())
+  watchlistId String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([watchlistId, assetId])
+}
+
+// ===================== WALLET / LEDGER =====================
+
+model Wallet {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency         String   @default("INR")
+  availableBalance Decimal  @default(0)
+  lockedBalance    Decimal  @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  transactions WalletTransaction[]
+  ledgerEntries LedgerEntry[]
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type        TxType
+  amount      Decimal
+  currency    String   @default("INR")
+  status      TxStatus @default(COMPLETED)
+  description String?
+  referenceId String?
+  createdAt   DateTime @default(now())
+
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId])
+}
+
+model LedgerEntry {
+  id            String             @id @default(cuid())
+  walletId      String
+  wallet        Wallet             @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  userId        String
+  transactionId String
+  transaction   WalletTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  debit         Decimal            @default(0)
+  credit        Decimal            @default(0)
+  balanceAfter  Decimal
+  currency      String             @default("INR")
+  referenceType String
+  referenceId   String?
+  createdAt     DateTime           @default(now())
+
+  @@index([walletId])
+}
+
+// ===================== PORTFOLIO / HOLDINGS =====================
+
+model Holding {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId      String
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  quantity     Decimal  @default(0)
+  averagePrice Decimal  @default(0)
+  realizedPnl  Decimal  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, assetId])
+}
+
+// ===================== ORDERS =====================
+
+model Order {
+  id               String      @id @default(cuid())
+  orderNumber      String      @unique
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId          String
+  asset            Asset       @relation(fields: [assetId], references: [id])
+  side             OrderSide
+  orderType        OrderType
+  quantity         Decimal
+  limitPrice       Decimal?
+  estimatedPrice   Decimal
+  executedPrice    Decimal?
+  executedQuantity Decimal?
+  fee              Decimal     @default(0)
+  status           OrderStatus @default(PENDING)
+  idempotencyKey   String?     @unique
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  executedAt       DateTime?
+  cancelledAt      DateTime?
+
+  @@index([userId])
+  @@index([assetId])
+}
+
+// ===================== KYC =====================
+
+model KycProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status           KycStatus @default(NOT_STARTED)
+  fullName         String?
+  dateOfBirth      String?
+  country          String?
+  address          String?
+  documentType     String?
+  documentNumber   String?
+  submittedAt      DateTime?
+  verifiedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// ===================== 2FA =====================
+
+model TwoFactorAuth {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled       Boolean  @default(false)
+  secretEncrypted String?
+  recoveryCodesJson String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ===================== NOTIFICATIONS =====================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+}
+
+// ===================== AUDIT LOG =====================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  metaJson  String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

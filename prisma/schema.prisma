@@ -265,7 +265,7 @@ model KycProfile {
   id               String    @id @default(cuid())
   userId           String    @unique
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status           KycStatus @default(NOT_STARTED)
+  status           status String @default("NOT_STARTED")
   fullName         String?
   dateOfBirth      String?
   country          String?

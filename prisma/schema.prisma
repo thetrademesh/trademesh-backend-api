@@ -64,22 +64,7 @@ enum TxStatus {
   CANCELLED
 }
 
-enum KycStatus {
-  NOT_STARTED
-  PENDING
-  VERIFIED
-  REJECTED
-}
 
-enum NotificationType {
-  ORDER_FILLED
-  ORDER_CANCELLED
-  DEPOSIT
-  WITHDRAWAL
-  KYC
-  SECURITY
-  SYSTEM
-}
 
 // ===================== USER & AUTH =====================
 
